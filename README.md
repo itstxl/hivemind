@@ -1,12 +1,22 @@
 # Hivemind
 
-**Your GPU is idle 90% of the day. What if it was powering AI for everyone?**
+### Premium AI without data centers. Powered by everyone.
 
-Hivemind is a decentralized LLM inference network where every user is also a node. Download the CLI, it detects your hardware, downloads a model shard, and you simultaneously contribute compute to the network *and* use the network as a coding assistant. Think BitTorrent for LLM inference, with Claude Code as the interface.
+The world doesn't need more data centers. We need to stop pretending it does.
 
-## The core idea
+Right now, billions of GPUs and CPUs sit mostly idle — in laptops, gaming rigs, and workstations — while corporations are drilling wells, diverting rivers, and burning coal to build the infrastructure to run AI for us. They're not doing it out of generosity. They do it to sit between you and the model, to harvest your data, to charge you a subscription, and to make themselves impossible to live without.
 
-A 72B parameter model (Qwen2.5-Coder-72B) is split across many consumer devices using pipeline parallelism. Each node holds a few transformer layers. When someone sends a prompt, it flows through a chain of nodes — each processing their layers and passing activations to the next. Users earn non-transferable utility tokens for contributing compute and spend them on inference.
+Here's the thing: we already have enough compute. Collectively, we always have. It's just fragmented, uncoordinated, and going to waste. The device in your pocket, the gaming rig under your desk, the MacBook on your kitchen table — together they dwarf what any one company could build. We just never had a way to use it together.
+
+Hivemind is that way.
+
+Every person who installs Hivemind contributes a tiny slice of their device to a shared inference network. A 72B parameter model — the same quality you'd pay $20/month for elsewhere — is split across thousands of ordinary machines. Your laptop runs a few transformer layers. Your neighbour's GPU runs a few more. When you send a prompt, it flows across that chain in milliseconds and comes back as a response. No data center. No corporation in the middle. No water pulled from a drought-stricken aquifer to cool a server rack you'll never see.
+
+You give a little compute. You get a premium AI coding assistant for free. Everyone does. That's the whole deal.
+
+This isn't a cost-saving hack. It's a different answer to the question of who gets to run AI, and who gets to benefit from it.
+
+## How it works
 
 ## Quick start
 
