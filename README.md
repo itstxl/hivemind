@@ -41,6 +41,18 @@ Prompt: "write a binary search in Rust"
 
 The orchestrator (initially run by bootstrap nodes, eventually fully decentralized) handles pipeline assembly: given a request, it finds a chain of available nodes that collectively cover all 80 layers, optimizing for minimum end-to-end latency.
 
+## Why a network can do what no individual can
+
+The best consumer GPU money can buy — an RTX 4090 with 24 GB of VRAM — can run a 70B model at Q4 quantization, and it's slow. A 405B model is simply impossible. You'd need roughly $15,000 worth of GPUs, or a cloud instance at $30+ per hour. The best open source models are, in practice, inaccessible to individuals.
+
+A Hivemind network with 1,000 active nodes each contributing 8–12 GB of VRAM has **8–12 terabytes of aggregate VRAM.** That's enough to run Llama 405B unquantized. Multiple models simultaneously. And eventually, future open source models with 1T+ parameters that no single organisation outside Google or Microsoft could afford to serve.
+
+This is the thing no centralized provider can replicate. A company has to buy all that hardware, power it, cool it, and depreciate it. Hivemind gets it for free — from people who already own it and weren't using it anyway.
+
+The scaling argument also inverts in a way that matters: **the larger the model, the more valuable the network becomes.** A 7B model? Anyone can run that on a laptop — Hivemind offers little advantage. A 405B model? Nobody can run that alone. Hivemind is the only way an individual accesses it without paying per-token to a corporation. A future 1T parameter model? Hivemind may be the only way anyone runs it outside of three companies on earth.
+
+This isn't a cheaper alternative to OpenAI. It's access to something OpenAI itself can't offer you: a frontier model running entirely on hardware you and your peers already own, with no company in the loop.
+
 ## Hardware requirements
 
 | Tier | Hardware | Role |
