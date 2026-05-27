@@ -1,0 +1,53 @@
+syntax = "proto3";
+package hivemind.routing;
+
+// Describes a single node's assignment in a pipeline.
+message PipelineSlot {
+  string node_id       = 1;
+  string peer_addr     = 2;  // libp2p multiaddr
+  uint32 layer_start   = 3;
+  uint32 layer_end     = 4;  // exclusive
+  uint32 position      = 5;  // 0-indexed chain position
+  uint32 latency_ms    = 6;  // last measured RTT
+}
+
+// Returned by the orchestrator when assembling a new pipeline.
+message PipelineAssignment {
+  string pipeline_id     = 1;
+  repeated PipelineSlot slots = 2;
+  // Total transformer layers in the model (e.g. 80 for Qwen2.5-72B).
+  uint32 total_layers    = 3;
+}
+
+message AssembleRequest {
+  // Requesting node ID.
+  string requester_id   = 1;
+  // Model name (e.g. "qwen2.5-coder-72b").
+  string model_name     = 2;
+  // Acceptable end-to-end latency budget in milliseconds.
+  uint32 max_latency_ms = 3;
+}
+
+message AssembleResponse {
+  PipelineAssignment assignment = 1;
+}
+
+// Health check / keepalive for a pipeline.
+message PipelineHealthRequest {
+  string pipeline_id = 1;
+  string node_id     = 2;
+}
+
+message PipelineHealthResponse {
+  bool   alive         = 1;
+  uint64 uptime_ms     = 2;
+}
+
+// Orchestrator service (run by well-connected bootstrap nodes).
+service RoutingService {
+  // Assemble a pipeline covering all model layers optimised for low latency.
+  rpc Assemble(AssembleRequest) returns (AssembleResponse);
+
+  // Check that all nodes in a pipeline are still alive.
+  rpc CheckPipelineHealth(PipelineHealthRequest) returns (PipelineHealthResponse);
+}

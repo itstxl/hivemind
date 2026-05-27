@@ -1,0 +1,23 @@
+[node]
+id   = "00000000-0000-0000-0000-000000000001"
+name = "node-test-0000"
+
+[hardware]
+gpu_allocation    = 0.8
+max_cpu_threads   = 4
+max_bandwidth_mbps = 100
+
+[model]
+name         = "qwen2.5-coder-72b"
+quantization = "q4_k_m"
+shard_path   = "/tmp/hivemind/shards"
+
+[network]
+bootstrap_nodes = [
+    "/ip4/127.0.0.1/tcp/4001",
+]
+listen_port             = 4099
+max_concurrent_pipelines = 2
+
+[tokens]
+auto_earn = false

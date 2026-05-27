@@ -1,0 +1,64 @@
+syntax = "proto3";
+package hivemind.discovery;
+
+// Capabilities advertised by a node when it joins the network.
+message NodeCapabilities {
+  string node_id              = 1;
+  string peer_id              = 2;  // libp2p PeerId (base58)
+  repeated string addrs       = 3;  // libp2p multiaddrs
+  uint32 layer_start          = 4;
+  uint32 layer_end            = 5;
+  string model_name           = 6;
+  string quantization         = 7;
+  uint64 vram_mb              = 8;  // 0 if CPU-only
+  uint64 ram_mb               = 9;
+  uint32 compute_major        = 10; // CUDA compute capability; 0 if CPU
+  uint32 compute_minor        = 11;
+  uint32 max_concurrent       = 12; // max simultaneous pipelines
+  uint32 bandwidth_mbps       = 13;
+}
+
+// Announcement broadcast when a node joins or refreshes its presence.
+message AnnounceRequest {
+  NodeCapabilities capabilities = 1;
+}
+
+message AnnounceResponse {
+  bool   accepted = 1;
+  string message  = 2;
+}
+
+// Query peers that cover a specific layer range.
+message FindPeersRequest {
+  uint32 layer_start = 1;
+  uint32 layer_end   = 2;
+  string model_name  = 3;
+  // Maximum number of results.
+  uint32 limit       = 4;
+}
+
+message FindPeersResponse {
+  repeated NodeCapabilities peers = 1;
+}
+
+// Heartbeat sent every 30 s to stay in the active peer set.
+message HeartbeatRequest {
+  string node_id   = 1;
+  uint32 latency_ms = 2; // current self-measured latency to a reference node
+}
+
+message HeartbeatResponse {
+  bool alive = 1;
+}
+
+// Discovery service (exposed by bootstrap nodes and eventually by all peers).
+service DiscoveryService {
+  // Announce this node's capabilities to the network.
+  rpc Announce(AnnounceRequest) returns (AnnounceResponse);
+
+  // Find peers that can serve the requested layer range.
+  rpc FindPeers(FindPeersRequest) returns (FindPeersResponse);
+
+  // Heartbeat keepalive.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}

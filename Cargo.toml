@@ -1,0 +1,59 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hivemind-core",
+    "crates/hivemind-shard",
+    "crates/hivemind-network",
+    "crates/hivemind-ledger",
+    "crates/hivemind-daemon",
+    "crates/hivemind-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "BSL-1.1"
+
+[workspace.dependencies]
+# Async runtime
+tokio        = { version = "1", features = ["full"] }
+async-trait  = "0.1"
+
+# Serialization
+serde  = { version = "1", features = ["derive"] }
+toml   = "0.8"
+prost  = "0.13"
+
+# Error handling
+thiserror = "2"
+anyhow    = "1"
+
+# Identifiers
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Logging
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# CLI & TUI
+clap      = { version = "4", features = ["derive", "env"] }
+ratatui   = "0.29"
+crossterm = "0.28"
+
+# Networking & gRPC
+libp2p = { version = "0.54", features = ["tokio", "kad", "noise", "yamux", "tcp", "ping", "identify"] }
+tonic  = "0.12"
+
+# Hardware detection
+nvml-wrapper = "0.10"
+sysinfo      = "0.31"
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+dirs   = "5"
+
+# Internal crates (usable as workspace = true in member Cargo.tomls)
+hivemind-core    = { path = "crates/hivemind-core" }
+hivemind-shard   = { path = "crates/hivemind-shard" }
+hivemind-network = { path = "crates/hivemind-network" }
+hivemind-ledger  = { path = "crates/hivemind-ledger" }

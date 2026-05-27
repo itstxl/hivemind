@@ -1,0 +1,13 @@
+[package]
+name = "hivemind-ledger"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hivemind-core = { workspace = true }
+thiserror     = { workspace = true }
+serde         = { workspace = true }
+tracing       = { workspace = true }
+tokio         = { workspace = true }
+chrono        = { workspace = true }

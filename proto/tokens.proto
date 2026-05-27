@@ -1,0 +1,63 @@
+syntax = "proto3";
+package hivemind.tokens;
+
+// Proof submitted by a node after serving a pipeline request.
+// The orchestrator verifies this and credits tokens to the node's ledger.
+message ComputeProof {
+  string pipeline_id     = 1;
+  string node_id         = 2;
+  uint32 layers_served   = 3;
+  uint32 sequence_length = 4;
+  uint64 compute_us      = 5;
+  // SHA-256 of (pipeline_id || output_activation[:64]) — binds proof to output.
+  bytes  output_hash     = 6;
+  // Ed25519 signature over the fields above using the node's keypair.
+  bytes  signature       = 7;
+}
+
+// Result of verifying and crediting a compute proof.
+message EarnResponse {
+  bool   accepted         = 1;
+  uint64 tokens_earned    = 2; // micro-tokens
+  uint64 new_balance      = 3; // micro-tokens
+  string rejection_reason = 4; // set only when accepted = false
+}
+
+// Authorization token presented by a consumer before requesting inference.
+message SpendRequest {
+  string consumer_id     = 1;
+  string model_name      = 2;
+  uint32 max_tokens      = 3;
+  uint64 max_cost        = 4; // micro-tokens (spend cap)
+  bytes  signature       = 5; // Ed25519 over fields above
+}
+
+message SpendResponse {
+  bool   authorized       = 1;
+  string session_token    = 2; // short-lived JWT passed to pipeline nodes
+  uint64 reserved_balance = 3;
+  string rejection_reason = 4;
+}
+
+message BalanceRequest {
+  string node_id = 1;
+}
+
+message BalanceResponse {
+  uint64 balance_micro  = 1; // micro-tokens
+  uint64 earned_total   = 2;
+  uint64 spent_total    = 3;
+  uint32 reputation     = 4; // 0–100
+}
+
+// Token ledger service (eventually on-chain; initially run by bootstrap nodes).
+service TokenService {
+  // Submit a proof of compute work and receive token credit.
+  rpc SubmitProof(ComputeProof) returns (EarnResponse);
+
+  // Reserve balance for an inference session.
+  rpc AuthorizeSpend(SpendRequest) returns (SpendResponse);
+
+  // Query current balance and stats.
+  rpc GetBalance(BalanceRequest) returns (BalanceResponse);
+}

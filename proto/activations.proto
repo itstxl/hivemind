@@ -1,0 +1,43 @@
+syntax = "proto3";
+package hivemind.activations;
+
+// Activation tensor exchanged between pipeline nodes.
+// Wire format keeps tensors in f32 to avoid precision loss during pipeline hops.
+message Tensor {
+  // Flat row-major data.
+  repeated float data = 1;
+  // Dimension sizes; length encodes the tensor rank.
+  repeated uint32 shape = 2;
+}
+
+// Sent by one pipeline node to the next.
+message ActivationRequest {
+  // Unique ID for the in-flight inference request.
+  string pipeline_id = 1;
+  // Position of the *sending* node in the pipeline (0-indexed).
+  uint32 sender_position = 2;
+  // Input activation tensor for this node's layer range.
+  Tensor input = 3;
+  // Token IDs for the current sequence (needed for positional encoding).
+  repeated uint32 token_ids = 4;
+  // Current sequence length including context.
+  uint32 seq_len = 5;
+}
+
+// Returned by the receiving node after its forward pass.
+message ActivationResponse {
+  string pipeline_id = 1;
+  // Output activation tensor (input for the next node, or final logits).
+  Tensor output = 2;
+  // Wall-clock forward-pass duration in microseconds.
+  uint64 compute_us = 3;
+}
+
+// gRPC service exposed by every shard node.
+service ActivationService {
+  // Process an activation through this node's shard layers.
+  rpc Forward(ActivationRequest) returns (ActivationResponse);
+
+  // Stream tokens back to the requester as they are sampled (last node only).
+  rpc ForwardStream(ActivationRequest) returns (stream ActivationResponse);
+}
