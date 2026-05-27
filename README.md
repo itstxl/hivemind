@@ -1,4 +1,4 @@
-# Hivemind
+# hivemind
 
 ### Premium AI without data centers. Powered by everyone.
 
