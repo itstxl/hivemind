@@ -16,8 +16,6 @@ You give a little compute. You get a premium AI coding assistant for free. Every
 
 This isn't a cost-saving hack. It's a different answer to the question of who gets to run AI, and who gets to benefit from it.
 
-## How it works
-
 ## Quick start
 
 ```sh
