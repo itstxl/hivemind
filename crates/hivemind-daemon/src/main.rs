@@ -30,7 +30,9 @@ async fn main() -> anyhow::Result<()> {
         .parse()
         .context("invalid listen address")?;
 
-    let _scheduler = scheduler::ResourceScheduler::new(config.network.max_concurrent_pipelines);
+    let scheduler = std::sync::Arc::new(scheduler::ResourceScheduler::new(
+        config.network.max_concurrent_pipelines,
+    ));
 
-    server::serve(addr, state).await
+    server::serve(addr, state, scheduler).await
 }

@@ -138,6 +138,11 @@ pub struct PipelineSlot {
     pub layer_range: LayerRange,
     /// Zero-based position in the pipeline chain.
     pub position: usize,
+    /// Warm standby nodes that already have this slot's weights loaded, in
+    /// failover-preference order. The upstream node promotes the first one
+    /// when the primary stops responding — no orchestrator round-trip needed.
+    #[serde(default)]
+    pub standbys: Vec<NodeId>,
 }
 
 /// Final output of a completed inference request.

@@ -12,3 +12,6 @@ tracing       = { workspace = true }
 tokio         = { workspace = true }
 nvml-wrapper  = { workspace = true }
 sysinfo       = { workspace = true }
+
+[dev-dependencies]
+uuid = { workspace = true }

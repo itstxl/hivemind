@@ -45,10 +45,51 @@ message FindPeersResponse {
 message HeartbeatRequest {
   string node_id   = 1;
   uint32 latency_ms = 2; // current self-measured latency to a reference node
+  // Spare shard-budget headroom, in layers, available for prefetching.
+  uint32 spare_layers = 3;
+}
+
+// Instruction to pre-load a contiguous layer range while idle, so every
+// layer keeps enough warm standbys network-wide. Weight downloads are the
+// slow part of failover recovery; they must happen before failures, never
+// on the critical path.
+message PrefetchDirective {
+  uint32 layer_start = 1;
+  uint32 layer_end   = 2;  // exclusive
+  string model_name  = 3;
+  string quantization = 4;
 }
 
 message HeartbeatResponse {
   bool alive = 1;
+  // Coverage-driven prefetch work for this node (usually empty).
+  repeated PrefetchDirective prefetch = 2;
+}
+
+// Why a node is leaving the network.
+enum DepartReason {
+  DEPART_UNSPECIFIED   = 0;
+  DEPART_SHUTDOWN      = 1; // OS shutdown / SIGTERM
+  DEPART_USER_RECLAIM  = 2; // user wants their hardware back
+  DEPART_LOW_BATTERY   = 3;
+  DEPART_RECONFIGURE   = 4; // changing shard assignment, coming back
+}
+
+// Announced when a node begins draining: it stops accepting new pipelines
+// and will finish (or hand off) in-flight sequences before `deadline_ms`.
+// The orchestrator promotes standbys into this node's slots proactively,
+// so its departure never surfaces as a mid-token failure.
+message DepartRequest {
+  string node_id        = 1;
+  DepartReason reason   = 2;
+  // Milliseconds until the node goes offline (its drain window).
+  uint64 deadline_ms    = 3;
+  // Pipelines the node is still serving; the orchestrator arranges handoff.
+  repeated string active_pipeline_ids = 4;
+}
+
+message DepartResponse {
+  bool acknowledged = 1;
 }
 
 // Discovery service (exposed by bootstrap nodes and eventually by all peers).
@@ -61,4 +102,9 @@ service DiscoveryService {
 
   // Heartbeat keepalive.
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Announce a graceful departure and begin draining. Nodes that depart
+  // via this call keep their reputation; nodes that vanish without it
+  // take the hard-drop penalty.
+  rpc Depart(DepartRequest) returns (DepartResponse);
 }

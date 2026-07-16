@@ -26,8 +26,9 @@ pub async fn run(args: &ChatArgs) -> Result<()> {
         .to_string();
 
     // Run the TUI in a blocking task so the async runtime stays free
+    let temperature = args.temperature;
     tokio::task::spawn_blocking(move || {
-        crate::ui::chat_tui::run_blocking(&model_name, args.temperature)
+        crate::ui::chat_tui::run_blocking(&model_name, temperature)
     })
     .await??;
 

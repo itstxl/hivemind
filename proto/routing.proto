@@ -1,6 +1,14 @@
 syntax = "proto3";
 package hivemind.routing;
 
+// A warm standby for a pipeline slot: a node that already has the slot's
+// weights loaded and can take over without downloading anything.
+message Standby {
+  string node_id    = 1;
+  string peer_addr  = 2;  // libp2p multiaddr
+  uint32 latency_ms = 3;  // last measured RTT
+}
+
 // Describes a single node's assignment in a pipeline.
 message PipelineSlot {
   string node_id       = 1;
@@ -9,6 +17,10 @@ message PipelineSlot {
   uint32 layer_end     = 4;  // exclusive
   uint32 position      = 5;  // 0-indexed chain position
   uint32 latency_ms    = 6;  // last measured RTT
+  // Standbys in failover-preference order. The upstream node reroutes to
+  // the first reachable one when the primary times out — failover is a
+  // local decision on the hot path, not an orchestrator round-trip.
+  repeated Standby standbys = 7;
 }
 
 // Returned by the orchestrator when assembling a new pipeline.
@@ -43,6 +55,20 @@ message PipelineHealthResponse {
   uint64 uptime_ms     = 2;
 }
 
+// Sent by an upstream node after it has promoted a standby locally, so the
+// orchestrator can refill the slot's standby pool and mark the failed node.
+message FailoverReport {
+  string pipeline_id      = 1;
+  string failed_node_id   = 2;
+  string promoted_node_id = 3;
+  uint32 position         = 4;
+}
+
+message FailoverResponse {
+  // Fresh standbys to top up the promoted slot's pool.
+  repeated Standby new_standbys = 1;
+}
+
 // Orchestrator service (run by well-connected bootstrap nodes).
 service RoutingService {
   // Assemble a pipeline covering all model layers optimised for low latency.
@@ -50,4 +76,7 @@ service RoutingService {
 
   // Check that all nodes in a pipeline are still alive.
   rpc CheckPipelineHealth(PipelineHealthRequest) returns (PipelineHealthResponse);
+
+  // Report a completed local failover; returns replacement standbys.
+  rpc ReportFailover(FailoverReport) returns (FailoverResponse);
 }

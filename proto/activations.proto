@@ -33,6 +33,22 @@ message ActivationResponse {
   uint64 compute_us = 3;
 }
 
+// Requests replay of this node's cached output boundary activations, so a
+// standby promoted into the *next* slot can rebuild its KV cache by running
+// one prefill over just its own layer range — no full-pipeline replay.
+message ReplayRequest {
+  string pipeline_id = 1;
+  // First token index to replay (0 rebuilds the whole sequence).
+  uint32 from_token  = 2;
+}
+
+// One cached boundary activation, streamed in token order.
+message ReplayChunk {
+  string pipeline_id = 1;
+  uint32 token_index = 2;
+  Tensor activation  = 3;
+}
+
 // gRPC service exposed by every shard node.
 service ActivationService {
   // Process an activation through this node's shard layers.
@@ -40,4 +56,10 @@ service ActivationService {
 
   // Stream tokens back to the requester as they are sampled (last node only).
   rpc ForwardStream(ActivationRequest) returns (stream ActivationResponse);
+
+  // Replay cached boundary activations for KV-cache recovery on a promoted
+  // standby. Served from the ActivationCheckpointStore; returns NOT_FOUND
+  // when the sequence has finished or been evicted (caller falls back to a
+  // full prefill through the chain).
+  rpc ReplayBoundary(ReplayRequest) returns (stream ReplayChunk);
 }

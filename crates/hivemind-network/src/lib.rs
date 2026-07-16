@@ -1,6 +1,9 @@
+pub mod coverage;
+pub mod failover;
 pub mod health;
 pub mod peer;
 pub mod pipeline;
+pub mod survival;
 pub mod transport;
 
 use async_trait::async_trait;
@@ -52,34 +55,33 @@ impl MockNetwork {
 impl NetworkService for MockNetwork {
     async fn discover_peers(&self, range: LayerRange) -> Result<Vec<PeerInfo>> {
         use uuid::Uuid;
-        // Return three fake peers evenly covering the range
+        // Three fake primaries evenly covering the range, plus a warm standby
+        // for each third so assembled pipelines exercise failover paths.
         let chunk = range.len() / 3;
-        Ok(vec![
-            PeerInfo {
-                node_id: Uuid::new_v4(),
-                peer_id: None,
-                addrs: vec!["/ip4/127.0.0.1/tcp/4002".into()],
-                layer_range: LayerRange::new(range.start, range.start + chunk),
-                latency_ms: Some(12),
-                reputation: 90,
-            },
-            PeerInfo {
-                node_id: Uuid::new_v4(),
-                peer_id: None,
-                addrs: vec!["/ip4/127.0.0.1/tcp/4003".into()],
-                layer_range: LayerRange::new(range.start + chunk, range.start + 2 * chunk),
-                latency_ms: Some(18),
-                reputation: 85,
-            },
-            PeerInfo {
-                node_id: Uuid::new_v4(),
-                peer_id: None,
-                addrs: vec!["/ip4/127.0.0.1/tcp/4004".into()],
-                layer_range: LayerRange::new(range.start + 2 * chunk, range.end),
-                latency_ms: Some(22),
-                reputation: 92,
-            },
-        ])
+        let mut port = 4002;
+        let mut peers = Vec::new();
+        for (i, (start, end)) in [
+            (range.start, range.start + chunk),
+            (range.start + chunk, range.start + 2 * chunk),
+            (range.start + 2 * chunk, range.end),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for replica in 0..2u32 {
+                peers.push(PeerInfo {
+                    node_id: Uuid::new_v4(),
+                    peer_id: None,
+                    addrs: vec![format!("/ip4/127.0.0.1/tcp/{port}")],
+                    layer_range: LayerRange::new(start, end),
+                    latency_ms: Some(12 + 5 * i as u32 + 10 * replica),
+                    reputation: 90,
+                    survival: 0.95 - 0.1 * replica as f32,
+                });
+                port += 1;
+            }
+        }
+        Ok(peers)
     }
 
     async fn assemble_pipeline(
@@ -88,7 +90,7 @@ impl NetworkService for MockNetwork {
         total_layers: u32,
     ) -> Result<Pipeline> {
         let peers = self.discover_peers(LayerRange::new(0, total_layers)).await?;
-        let spec = pipeline::PipelineSpec { total_layers, max_latency_ms: 500 };
+        let spec = pipeline::PipelineSpec::new(total_layers, 500);
         pipeline::assemble_pipeline(&spec, &peers, requester)
     }
 

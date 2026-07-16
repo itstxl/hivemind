@@ -17,6 +17,16 @@ pub struct PeerInfo {
     pub latency_ms: Option<u32>,
     /// Peer's self-reported reputation score (0–100).
     pub reputation: u8,
+    /// Estimated probability this peer stays online for the placement
+    /// horizon, stamped locally from its session history before assembly
+    /// (see `survival::SessionTracker::annotate_peers`). Defaults to 1.0
+    /// (no history-based penalty).
+    #[serde(default = "default_survival")]
+    pub survival: f32,
+}
+
+fn default_survival() -> f32 {
+    1.0
 }
 
 impl PeerInfo {

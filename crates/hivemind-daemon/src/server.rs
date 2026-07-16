@@ -1,11 +1,17 @@
 #![allow(dead_code)] // Stub implementations — will be replaced by tonic codegen
 
-use hivemind_core::{Config, LayerRange, MicroToken, Tensor};
+use crate::scheduler::ResourceScheduler;
+use hivemind_core::{Config, LayerRange, MicroToken, PipelineId, Tensor};
 use hivemind_ledger::Wallet;
+use hivemind_shard::ActivationCheckpointStore;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tonic::{Code, Status};
-use tracing::info;
+use tracing::{info, warn};
+
+/// How long a draining daemon waits for in-flight pipelines before exiting.
+const DRAIN_WINDOW: Duration = Duration::from_secs(30);
 
 /// Shared state injected into every gRPC request handler.
 #[derive(Clone)]
@@ -13,6 +19,9 @@ pub struct ServerState {
     pub config: Arc<Config>,
     pub wallet: Arc<Wallet>,
     pub layer_range: LayerRange,
+    /// Output boundary activations for active sequences, kept so a standby
+    /// promoted downstream can rebuild its KV cache via `ReplayBoundary`.
+    pub checkpoints: Arc<Mutex<ActivationCheckpointStore>>,
 }
 
 impl ServerState {
@@ -21,6 +30,7 @@ impl ServerState {
             config: Arc::new(config),
             wallet: Arc::new(wallet),
             layer_range,
+            checkpoints: Arc::new(Mutex::new(ActivationCheckpointStore::default())),
         }
     }
 }
@@ -33,17 +43,55 @@ impl ServerState {
 /// TODO: replace with `#[tonic::async_trait] impl ActivationService for ShardHandler`.
 pub async fn handle_activation(
     state: &ServerState,
+    pipeline_id: PipelineId,
+    token_index: u32,
     input: Tensor,
 ) -> Result<Tensor, Status> {
     // TODO: enforce layer routing — reject requests for layers we don't own
     // TODO: call hivemind_shard::inference::forward_pass(input, &state.loaded_shard)
     let output = Tensor::zeros(input.shape.clone());
 
+    // Checkpoint our output so the node downstream can be replaced without a
+    // full-pipeline prefill (see hivemind_shard::checkpoint).
+    if let Err(e) = state
+        .checkpoints
+        .lock()
+        .unwrap()
+        .record(pipeline_id, token_index, &output)
+    {
+        warn!(%pipeline_id, token_index, error = %e, "checkpoint record failed");
+    }
+
     let layers = state.layer_range.len() as u64;
     let seq_len = input.shape.first().copied().unwrap_or(1) as u64;
     state.wallet.earn(MicroToken(layers * seq_len));
 
     Ok(output)
+}
+
+/// Serves `ActivationService.ReplayBoundary`: cached boundary activations for
+/// a promoted standby rebuilding its KV cache.
+#[allow(clippy::result_large_err)] // tonic handlers return Status by value
+pub fn handle_replay(
+    state: &ServerState,
+    pipeline_id: PipelineId,
+    from_token: u32,
+) -> Result<Vec<Tensor>, Status> {
+    state
+        .checkpoints
+        .lock()
+        .unwrap()
+        .replay(pipeline_id, from_token)
+        .ok_or_else(|| {
+            Status::not_found(format!(
+                "no checkpoints for pipeline {pipeline_id}; caller must fall back to full prefill"
+            ))
+        })
+}
+
+/// Drops checkpoints for a completed sequence.
+pub fn handle_sequence_finished(state: &ServerState, pipeline_id: PipelineId) {
+    state.checkpoints.lock().unwrap().finish(pipeline_id);
 }
 
 /// Starts the gRPC shard server on `addr`.
@@ -58,7 +106,11 @@ pub async fn handle_activation(
 ///     .serve(addr)
 ///     .await?;
 /// ```
-pub async fn serve(addr: SocketAddr, state: ServerState) -> anyhow::Result<()> {
+pub async fn serve(
+    addr: SocketAddr,
+    state: ServerState,
+    scheduler: Arc<ResourceScheduler>,
+) -> anyhow::Result<()> {
     info!(%addr, layers = %state.layer_range, "shard server starting");
 
     // Validate that tonic is wired in (will be replaced by real service registration)
@@ -66,7 +118,45 @@ pub async fn serve(addr: SocketAddr, state: ServerState) -> anyhow::Result<()> {
 
     // Placeholder: wait for shutdown signal
     // Real server will be a tonic::transport::Server loop
+    wait_for_shutdown_signal().await?;
+
+    // Graceful drain: most node departures are lid-closes and shutdowns, not
+    // crashes. Announcing and draining means the orchestrator promotes our
+    // standbys proactively and no user ever sees this node vanish mid-token.
+    scheduler.begin_drain();
+    info!(
+        in_flight = scheduler.active_pipeline_count(),
+        drain_window_s = DRAIN_WINDOW.as_secs(),
+        "drain started — announcing departure"
+    );
+
+    // TODO: send DiscoveryService.Depart(DEPART_SHUTDOWN, deadline, active
+    // pipeline IDs) to the orchestrator once the network layer is wired up.
+
+    if scheduler.wait_drained(DRAIN_WINDOW).await {
+        info!("drain complete — all pipelines finished, exiting cleanly");
+    } else {
+        warn!(
+            in_flight = scheduler.active_pipeline_count(),
+            "drain window elapsed with pipelines still in flight — exiting anyway"
+        );
+    }
+    Ok(())
+}
+
+/// Resolves when the daemon should begin draining: ctrl-c everywhere, plus
+/// SIGTERM on unix (systemd stop, OS shutdown).
+async fn wait_for_shutdown_signal() -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+        tokio::select! {
+            r = tokio::signal::ctrl_c() => r?,
+            _ = sigterm.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
     tokio::signal::ctrl_c().await?;
-    info!("daemon shutting down");
     Ok(())
 }
