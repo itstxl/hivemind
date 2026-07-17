@@ -37,6 +37,11 @@ pub struct NetworkConfig {
     pub bootstrap_nodes: Vec<String>,
     pub listen_port: u16,
     pub max_concurrent_pipelines: u32,
+    /// gRPC URL of the orchestrator used for pipeline assembly
+    /// (e.g. `http://127.0.0.1:7000`). Overridable via
+    /// `HIVEMIND_ORCHESTRATOR_URL`.
+    #[serde(default)]
+    pub orchestrator_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,6 +113,7 @@ impl Config {
                 ],
                 listen_port: 4001,
                 max_concurrent_pipelines: 3,
+                orchestrator_url: None,
             },
             tokens: TokensConfig { auto_earn: true },
         }

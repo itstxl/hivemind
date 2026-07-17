@@ -5,11 +5,13 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-hivemind-core = { workspace = true }
-thiserror     = { workspace = true }
-serde         = { workspace = true }
-tracing       = { workspace = true }
-tokio         = { workspace = true }
-async-trait   = { workspace = true }
-libp2p        = { workspace = true }
-uuid          = { workspace = true }
+hivemind-core  = { workspace = true }
+hivemind-proto = { workspace = true }
+thiserror      = { workspace = true }
+serde          = { workspace = true }
+tracing        = { workspace = true }
+tokio          = { workspace = true }
+async-trait    = { workspace = true }
+libp2p         = { workspace = true }
+tonic          = { workspace = true }
+uuid           = { workspace = true }

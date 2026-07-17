@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/hivemind-core",
+    "crates/hivemind-proto",
     "crates/hivemind-shard",
     "crates/hivemind-network",
     "crates/hivemind-ledger",
@@ -17,6 +18,7 @@ license = "BSL-1.1"
 [workspace.dependencies]
 # Async runtime
 tokio        = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
 async-trait  = "0.1"
 
 # Serialization
@@ -43,6 +45,8 @@ crossterm = "0.28"
 # Networking & gRPC
 libp2p = { version = "0.54", features = ["tokio", "kad", "noise", "yamux", "tcp", "ping", "identify"] }
 tonic  = "0.12"
+tonic-build         = "0.12"
+protoc-bin-vendored = "3"
 
 # Hardware detection
 nvml-wrapper = "0.10"
@@ -54,6 +58,7 @@ dirs   = "5"
 
 # Internal crates (usable as workspace = true in member Cargo.tomls)
 hivemind-core    = { path = "crates/hivemind-core" }
+hivemind-proto   = { path = "crates/hivemind-proto" }
 hivemind-shard   = { path = "crates/hivemind-shard" }
 hivemind-network = { path = "crates/hivemind-network" }
 hivemind-ledger  = { path = "crates/hivemind-ledger" }

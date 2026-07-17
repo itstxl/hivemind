@@ -10,12 +10,15 @@ path = "src/main.rs"
 
 [dependencies]
 hivemind-core    = { workspace = true }
+hivemind-proto   = { workspace = true }
 hivemind-shard   = { workspace = true }
 hivemind-network = { workspace = true }
 hivemind-ledger  = { workspace = true }
 anyhow           = { workspace = true }
 tokio            = { workspace = true }
+tokio-stream     = { workspace = true }
 tracing          = { workspace = true }
 tracing-subscriber = { workspace = true }
 tonic            = { workspace = true }
 serde            = { workspace = true }
+uuid             = { workspace = true }

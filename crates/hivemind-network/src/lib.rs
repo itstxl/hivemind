@@ -1,5 +1,6 @@
 pub mod coverage;
 pub mod failover;
+pub mod grpc;
 pub mod health;
 pub mod peer;
 pub mod pipeline;
