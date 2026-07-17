@@ -18,11 +18,31 @@ This isn't a cost-saving hack. It's a different answer to the question of who ge
 
 ## Quick start
 
+There is no public network yet, but the whole system runs today on your own
+machine — a real orchestrator, real shard nodes, and real distributed
+inference over gRPC:
+
 ```sh
-cargo install hivemind-cli
-hivemind init      # detect hardware, download your shard, join the network
-hivemind chat      # start coding
+git clone <this repo> && cd hivemind && cargo build
+
+# 1. Start the orchestrator
+HIVEMIND_MODE=orchestrator HIVEMIND_BIND=127.0.0.1:7001 \
+  HIVEMIND_TOTAL_LAYERS=6 target/debug/hivemind-daemon
+
+# 2. Start a worker per layer range (repeat with 0..2, 2..4, 4..6)
+HIVEMIND_MODE=worker HIVEMIND_LAYERS=0..2 HIVEMIND_TOTAL_LAYERS=6 \
+  HIVEMIND_ORCHESTRATOR_URL=http://127.0.0.1:7001 \
+  HIVEMIND_BIND=127.0.0.1:0 target/debug/hivemind-daemon
+
+# 3. Generate across the pipeline
+HIVEMIND_ORCHESTRATOR_URL=http://127.0.0.1:7001 \
+  target/debug/hivemind complete "fn main() {"
 ```
+
+Today this serves a small built-in reference model (untrained, so the output
+is deterministic noise) — its purpose is proving the distributed machinery,
+not writing your code yet. Production models plug in behind the same
+`InferenceEngine` trait; see [Status](#status).
 
 ## How it works
 
@@ -39,7 +59,33 @@ Prompt: "write a binary search in Rust"
   Last node samples a token ──► streams it back to the user ──► repeat.
 ```
 
-The orchestrator (initially run by bootstrap nodes, eventually fully decentralized) handles pipeline assembly: given a request, it finds a chain of available nodes that collectively cover all 80 layers, optimizing for minimum end-to-end latency.
+The orchestrator (initially run by bootstrap nodes, eventually fully decentralized) handles pipeline assembly: given a request, it finds a chain of available nodes that collectively cover all 80 layers, optimizing for minimum end-to-end latency. (The current implementation routes hops through the requesting client, Petals-style; direct node-to-node forwarding is planned.)
+
+## Surviving churn
+
+The network is made of laptops that close and desktops that reboot, so a node
+vanishing must never kill a session. Four mechanisms make churn survivable —
+and they work today: in the end-to-end tests, a node hard-killed
+mid-generation changes nothing but a moment's latency, and the output stays
+**bit-identical** to an uninterrupted run.
+
+- **Warm standbys.** Every pipeline slot is assembled with backup nodes that
+  already hold its weights. When a hop stops answering, the standby is
+  promoted locally — no orchestrator round-trip — and the orchestrator
+  refills the pool afterwards.
+- **Activation replay.** A promoted standby has cold attention state. The
+  client records every boundary activation it has sent and replays the hop's
+  history in one prefill, rebuilding the standby's KV cache exactly — no
+  full-pipeline rerun.
+- **Graceful drain.** Most departures are lid-closes, not crashes. On
+  SIGTERM the daemon stops accepting work, finishes in-flight sequences, and
+  announces its departure so standbys are promoted before anything fails.
+  Announced exits are free; vanishing mid-pipeline costs heavy reputation.
+- **Survival-aware placement.** The orchestrator tracks each node's session
+  history and estimates how likely it is to still be online in twenty
+  minutes. A stable desktop beats a marginally faster laptop that joined
+  three minutes ago, and idle nodes are directed to pre-load
+  under-replicated layers before failures happen.
 
 ## Why a network can do what no individual can
 
@@ -67,19 +113,42 @@ This isn't a cheaper alternative to OpenAI. It's access to something OpenAI itse
 hivemind/
 ├── crates/
 │   ├── hivemind-core      # shared types, config, error handling
-│   ├── hivemind-shard     # model loading (GGUF/llama.cpp) and inference
-│   ├── hivemind-network   # P2P layer: Kademlia DHT, QUIC transport
+│   ├── hivemind-proto     # tonic-generated gRPC clients/servers
+│   ├── hivemind-shard     # InferenceEngine trait, reference transformer,
+│   │                      #   activation checkpoints (GGUF/llama.cpp planned)
+│   ├── hivemind-network   # pipeline assembly, failover, survival model,
+│   │                      #   coverage planner, client session driver
 │   ├── hivemind-ledger    # token accounting and reputation
-│   ├── hivemind-daemon    # background node process (gRPC shard server)
+│   ├── hivemind-daemon    # shard server + orchestrator (one binary, two roles)
 │   └── hivemind-cli       # user-facing CLI with ratatui chat TUI
 └── proto/
-    ├── activations.proto  # tensor passing between nodes
-    ├── routing.proto      # pipeline assembly
-    ├── discovery.proto    # peer discovery and health
+    ├── activations.proto  # tensor passing + KV replay between nodes
+    ├── routing.proto      # pipeline assembly and failover reporting
+    ├── discovery.proto    # announce, heartbeat, graceful departure, prefetch
     └── tokens.proto       # token ledger operations
 ```
 
-**Key dependencies:** `libp2p` (Kademlia + QUIC), `tonic`/`prost` (gRPC), `llama-cpp-rs` (inference), `ratatui` (TUI), `tokio` (async runtime).
+**Key dependencies:** `tonic`/`prost` (gRPC), `tokio` (async runtime), `libp2p` (Kademlia + QUIC, planned), `llama-cpp-rs` (inference, planned), `ratatui` (TUI).
+
+## Status
+
+Early development — but the distributed core is real and tested. What works
+today, verified by end-to-end tests against live localhost servers:
+
+- Orchestrator + shard workers as real gRPC processes; announce, heartbeat,
+  pipeline assembly, and generation across multiple nodes.
+- Distributed output bit-identical to single-node inference.
+- Hard node kills and graceful drains mid-generation survived bit-exactly
+  via standby promotion and activation replay.
+- Per-layer token earning on serving nodes.
+
+What is not real yet: the model is an untrained reference transformer
+(llama.cpp/GGUF backend is the next big step), discovery is registry-based
+rather than DHT, transport is HTTP/2 rather than QUIC, prefetch directives
+are logged but not yet acted on, wallets are in-memory, and none of the
+verification/privacy work (untrusted nodes returning garbage, activations
+being readable in transit) has begun. Treat it as a working prototype of the
+network layer, not something to expose to the internet.
 
 ## Token economics
 
@@ -104,10 +173,11 @@ hivemind config set hardware.gpu_allocation 0.6
 Hivemind is in early development. The network protocol and token economics are not final.
 
 **Good first issues:**
-- Wire up `llama-cpp-rs` in `hivemind-shard/src/inference.rs`
+- Implement a llama.cpp/GGUF backend for the `InferenceEngine` trait in `hivemind-shard/src/engine.rs`
+- Act on prefetch directives: load the extra layers and re-announce (`hivemind-daemon/src/node.rs`)
 - Implement Kademlia peer discovery in `hivemind-network/src/peer.rs`
 - Add wallet persistence in `hivemind-ledger/src/wallet.rs`
-- Stream tokens in the chat TUI as they arrive
+- Wire the chat TUI to `PipelineSession` and stream tokens as they arrive
 
 Run `cargo build` and `cargo clippy` before submitting a PR.
 
